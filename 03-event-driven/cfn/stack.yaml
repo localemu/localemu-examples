@@ -1,0 +1,217 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Fan-out pipeline: SNS topic -> (emails SQS + alerts SQS with FilterPolicy)
+  -> two Lambda consumers -> shared DynamoDB sink.
+
+Parameters:
+  NamePrefix:
+    Type: String
+    Default: le-events
+  AlertThreshold:
+    Type: Number
+    Default: 100
+
+Resources:
+
+  # -------------------- DynamoDB sink --------------------
+  EventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${NamePrefix}-events"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: event_id, AttributeType: S }
+        - { AttributeName: service,  AttributeType: S }
+      KeySchema:
+        - { AttributeName: event_id, KeyType: HASH }
+        - { AttributeName: service,  KeyType: RANGE }
+
+  # -------------------- SNS topic (the fan-out point) --------------------
+  EventsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${NamePrefix}-events"
+
+  # -------------------- SQS queues --------------------
+  EmailsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${NamePrefix}-emails"
+      VisibilityTimeout: 30
+
+  AlertsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${NamePrefix}-alerts"
+      VisibilityTimeout: 30
+
+  # -------------------- SNS subscriptions --------------------
+  EmailsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref EventsTopic
+      Protocol: sqs
+      Endpoint: !GetAtt EmailsQueue.Arn
+      RawMessageDelivery: false
+
+  # FilterPolicy: only orders with amount >= AlertThreshold reach the alerts queue.
+  AlertsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref EventsTopic
+      Protocol: sqs
+      Endpoint: !GetAtt AlertsQueue.Arn
+      RawMessageDelivery: false
+      FilterPolicyScope: MessageAttributes
+      FilterPolicy:
+        amount:
+          - numeric: [">=", !Ref AlertThreshold]
+
+  # -------------------- SQS queue policies (required for SNS delivery) --------------------
+  EmailsQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues: [!Ref EmailsQueue]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: sns.amazonaws.com }
+            Action: sqs:SendMessage
+            Resource: !GetAtt EmailsQueue.Arn
+            Condition:
+              ArnEquals: { "aws:SourceArn": !Ref EventsTopic }
+
+  AlertsQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues: [!Ref AlertsQueue]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: sns.amazonaws.com }
+            Action: sqs:SendMessage
+            Resource: !GetAtt AlertsQueue.Arn
+            Condition:
+              ArnEquals: { "aws:SourceArn": !Ref EventsTopic }
+
+  # -------------------- IAM role for the consumers --------------------
+  ConsumerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${NamePrefix}-consumer-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: consumer-inline
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: "*"
+              - Effect: Allow
+                Action: [sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes]
+                Resource:
+                  - !GetAtt EmailsQueue.Arn
+                  - !GetAtt AlertsQueue.Arn
+              - Effect: Allow
+                Action: [dynamodb:PutItem]
+                Resource: !GetAtt EventsTable.Arn
+
+  # -------------------- Lambda consumers (inline ZipFile, file is index.py on AWS) --------------------
+  EmailsConsumer:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${NamePrefix}-emails-consumer"
+      Runtime: python3.12
+      Handler: index.handle
+      Role: !GetAtt ConsumerRole.Arn
+      Timeout: 15
+      Environment:
+        Variables:
+          SERVICE_NAME: emails
+          TABLE_NAME: !Ref EventsTable
+      Code:
+        ZipFile: |
+          import json, os, boto3
+          _table = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"])
+          SERVICE = os.environ["SERVICE_NAME"]
+
+          def handle(event, _ctx):
+              for record in event.get("Records", []):
+                  body = json.loads(record["body"])
+                  payload = json.loads(body["Message"])
+                  _table.put_item(Item={
+                      "event_id": payload["event_id"],
+                      "service":  SERVICE,
+                      "payload":  json.dumps(payload),
+                  })
+              return {"processed": len(event.get("Records", []))}
+
+  AlertsConsumer:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${NamePrefix}-alerts-consumer"
+      Runtime: python3.12
+      Handler: index.handle
+      Role: !GetAtt ConsumerRole.Arn
+      Timeout: 15
+      Environment:
+        Variables:
+          SERVICE_NAME: alerts
+          TABLE_NAME: !Ref EventsTable
+      Code:
+        ZipFile: |
+          import json, os, boto3
+          _table = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"])
+          SERVICE = os.environ["SERVICE_NAME"]
+
+          def handle(event, _ctx):
+              for record in event.get("Records", []):
+                  body = json.loads(record["body"])
+                  payload = json.loads(body["Message"])
+                  _table.put_item(Item={
+                      "event_id": payload["event_id"],
+                      "service":  SERVICE,
+                      "payload":  json.dumps(payload),
+                  })
+              return {"processed": len(event.get("Records", []))}
+
+  # -------------------- EventSourceMappings (Lambda polls SQS) --------------------
+  EmailsMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt EmailsQueue.Arn
+      FunctionName: !Ref EmailsConsumer
+      BatchSize: 5
+
+  AlertsMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt AlertsQueue.Arn
+      FunctionName: !Ref AlertsConsumer
+      BatchSize: 5
+
+Outputs:
+  TopicArn:
+    Value: !Ref EventsTopic
+  EmailsQueueArn:
+    Value: !GetAtt EmailsQueue.Arn
+  EmailsQueueUrl:
+    Value: !Ref EmailsQueue
+  AlertsQueueArn:
+    Value: !GetAtt AlertsQueue.Arn
+  AlertsQueueUrl:
+    Value: !Ref AlertsQueue
+  TableName:
+    Value: !Ref EventsTable
+  EmailsConsumerName:
+    Value: !Ref EmailsConsumer
+  AlertsConsumerName:
+    Value: !Ref AlertsConsumer

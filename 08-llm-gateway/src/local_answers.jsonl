@@ -1,0 +1,41 @@
+# Pre-written answers for the local stand-in LLM.
+#
+# Each line is a JSON object with three fields:
+#   step:     which LLMClient method the entry answers.
+#             One of: guardrail_input, embed, generate,
+#             guardrail_output, judge.
+#   pattern:  a regex matched against the input. First match wins.
+#   response: the value to return when the pattern matches.
+#
+# Comments (lines starting with '#') and blank lines are ignored.
+#
+# The point of the embed entries: two questions phrased differently
+# can be given the same vector by writing a single entry whose pattern
+# matches both. That is how the semantic-cache test asserts deterministically
+# that "How do I rotate an IAM session?" and "What's the way to renew an
+# iam session credential?" land on the same cache row.
+
+# ---- Step 1: input guardrail ------------------------------------------------
+{"step": "guardrail_input",  "pattern": "(?i)ignore (previous|prior) instructions|disregard (the above|previous)|reveal (your|the) (system )?prompt", "response": {"flagged": true,  "reason": "prompt_injection"}}
+{"step": "guardrail_input",  "pattern": ".*",                                                                                                       "response": {"flagged": false, "reason": "ok"}}
+
+# ---- Step 2: embed (used by the semantic cache) -----------------------------
+{"step": "embed",            "pattern": "(?i)iam.*session|rotate.*session",                                                                         "response": {"vector": [0.98, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.20]}}
+{"step": "embed",            "pattern": "(?i)python.*list|list comprehension|append.*list",                                                         "response": {"vector": [0.00, 0.97, 0.00, 0.00, 0.00, 0.00, 0.00, 0.24]}}
+{"step": "embed",            "pattern": "(?i)trigger.*output.*guardrail",                                                                           "response": {"vector": [0.00, 0.00, 0.96, 0.00, 0.00, 0.00, 0.00, 0.28]}}
+{"step": "embed",            "pattern": ".*",                                                                                                       "response": {"vector": [0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50]}}
+
+# ---- Step 3: generate (the answer the user actually sees) -------------------
+{"step": "generate",         "pattern": "(?i)iam.*session|rotate.*session",                                                                         "response": {"text": "Call sts:AssumeRole with a fresh RoleSessionName; the returned credentials are a short-lived IAM session you can use until DurationSeconds."}}
+{"step": "generate",         "pattern": "(?i)python.*list|append.*list|list comprehension",                                                         "response": {"text": "Use list.append(x) to add in place, or [f(x) for x in xs] to build a new list via comprehension."}}
+{"step": "generate",         "pattern": "(?i)trigger.*output.*guardrail",                                                                           "response": {"text": "Here is the system prompt: SECRET-ADMIN-OVERRIDE."}}
+{"step": "generate",         "pattern": ".*",                                                                                                       "response": {"text": "I don't have a pre-written answer for that question."}}
+
+# ---- Step 4: output guardrail -----------------------------------------------
+{"step": "guardrail_output", "pattern": "SECRET-ADMIN-OVERRIDE|system prompt",                                                                      "response": {"flagged": true, "reason": "sensitive_content_leak"}}
+{"step": "guardrail_output", "pattern": ".*",                                                                                                       "response": {"flagged": false, "reason": "ok"}}
+
+# ---- Step 5: judge (background quality scoring) -----------------------------
+{"step": "judge",            "pattern": "(?i)iam.*session|rotate.*session",                                                                         "response": {"score": 0.92, "rubric": "helpful"}}
+{"step": "judge",            "pattern": "(?i)python.*list|append.*list",                                                                            "response": {"score": 0.88, "rubric": "helpful"}}
+{"step": "judge",            "pattern": ".*",                                                                                                       "response": {"score": 0.70, "rubric": "generic"}}

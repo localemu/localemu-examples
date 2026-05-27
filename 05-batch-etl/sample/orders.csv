@@ -1,0 +1,7 @@
+order_id,amount,customer
+ord-001,42.50,alice
+ord-002,199.99,bob
+ord-003,17.25,carol
+ord-004,1000.00,dave
+,50.00,eve
+ord-006,-10.00,frank
