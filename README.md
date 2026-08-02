@@ -43,7 +43,7 @@ The tutorials come in two shapes:
 | [`12-kinesis-demo/`](./12-kinesis-demo) | Stream create, PutRecord, GetRecords round-trip | none |
 | [`13-opensearch-demo/`](./13-opensearch-demo) | Domain create (real OpenSearch container), index, search | none |
 | [`14-rds-demo/`](./14-rds-demo) | Postgres + MySQL DB instances, psql + mysql clients, Python round-trip | `RDS_DOCKER_BACKEND=1` |
-| [`15-ec2-demo/`](./15-ec2-demo) | RunInstances spins a real Docker container; SSH in via `localemu ssh` | none |
+| [`15-ec2-demo/`](./15-ec2-demo) | RunInstances spins a real Docker container; reach it via `localemu ssh`, real in-VPC SSH, EC2 Instance Connect, or SSM | none |
 | [`16-ecs-demo/`](./16-ecs-demo) | Cluster + task definition + RunTask, real containers behind the API | none |
 | [`17-eks-demo/`](./17-eks-demo) | EKS cluster via k3d, `kubectl apply`, real pod deploy | none |
 | [`18-transit-gateway-demo/`](./18-transit-gateway-demo) | Three VPCs, TGW + peering, connectivity matrix verified end-to-end | none |
