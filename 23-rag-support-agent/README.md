@@ -43,18 +43,18 @@ lookups, 1 two-tool chain (unknown order -> ticket), 1 input validation.
 └── scripts/{deploy,test,teardown}.sh, seed.py
 ```
 
-## Two things worth knowing before you present this live
+## Three things worth knowing before you present this live
 
-**1. The OpenSearch domain takes Terraform ~10 minutes to report
-"Creation complete" — even though the domain itself is ready in seconds.**
-Checked directly mid-apply: `DescribeDomain` already showed
-`Processing: False` with a working endpoint well before Terraform's
-"Still creating..." loop finished. This is the HashiCorp AWS provider's
-own domain-ready waiter, not LocalEmu being slow — it doesn't appear to
-treat LocalEmu's `Processing: False` as "done" early, and just runs its
-full real-AWS-shaped wait budget. **For a live demo, deploy before you go
-on stage** (or script around Terraform with the raw CLI, which returns
-immediately once the domain is actually ready).
+**1. `terraform apply` and `terraform destroy` each take ~10 minutes
+because of the Terraform AWS provider, not because of LocalEmu.**
+In provider 5.100.0 (`internal/service/opensearch/wait.go`),
+`waitForDomainCreation` and `waitForDomainDelete` call
+`tfresource.WithDelay(10*time.Minute)`: the provider sends no
+`DescribeDomain` request for the first 10 minutes, then polls every 10
+seconds. LocalEmu 1.3.2 reports the domain ready in about 8 seconds
+(LocalEmu 1.3.1, tested, never did when running in Docker; see
+the 1.3.2 changelog). **For a live demo, deploy before you go on stage** (or
+script around Terraform with the raw CLI).
 
 **2. The agent Lambda can't reach OpenSearch via `localhost:<port>`.**
 `OPENSEARCH_ENDPOINT` (from Terraform) is a *host*-mapped address —
@@ -66,6 +66,18 @@ OpenSearch — see `_container_reachable_endpoint`. No example in this
 repo needed this before (`14-rds-demo` talks *to* its container from a
 script on your laptop, never *from* a Lambda calling *into* another
 sidecar container), so there was no existing convention to copy.
+
+**3. On Linux, `host.docker.internal` does not exist inside Lambda
+containers**, so the agent cannot reach OpenSearch and the deploy-time
+tests fail. Start LocalEmu with the name added:
+
+```sh
+LAMBDA_DOCKER_FLAGS="--add-host=host.docker.internal:host-gateway" localemu start
+```
+
+With Docker, add `-e LAMBDA_DOCKER_FLAGS="--add-host=host.docker.internal:host-gateway"`
+to your `docker run`. Docker Desktop provides the name itself and needs no flag.
+Tested on an Amazon Linux EC2 host with this flag: 7/7 tests pass.
 
 ## Requires
 
