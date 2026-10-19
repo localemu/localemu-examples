@@ -34,6 +34,9 @@ The tutorials come in two shapes:
 | [`08-llm-gateway/`](./08-llm-gateway) | Guardrailed, cached, evaluated LLM gateway (API GW + Lambda + DDB + EB + SQS + CW) |
 | [`09-ci-cd/`](./09-ci-cd) | Lambda handler unit tests against a LocalEmu service, runnable from any CI |
 | [`10-microservices/`](./10-microservices) | SNS + 2 SQS + 2 DynamoDB-table mini e-commerce wired up via plain `aws` CLI |
+| [`22-guardduty-autoremediation/`](./22-guardduty-autoremediation) | GuardDuty finding to EventBridge to Lambda containment: `aws:TokenIssueTime` session quarantine, IAM-user lockout, SNS alert (needs `IAM_ENFORCEMENT=1`, LocalEmu 1.3.0+) |
+| [`23-rag-support-agent/`](./23-rag-support-agent) | Retail support agent: order-id router, OpenSearch k-NN retrieval over an FAQ, Lambda tools, Bedrock `InvokeModel` (synthetic, or real local model with `BEDROCK_BACKEND=ollama`, LocalEmu 1.3.0+) |
+| [`24-retail-streaming-analytics/`](./24-retail-streaming-analytics) | Firehose to S3 to Glue to Athena: order events in, SQL aggregates out |
 
 ### Service demos (one-shot walkthroughs)
 

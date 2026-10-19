@@ -1,0 +1,27 @@
+# Canned answers for LLM_MODE=local (the default). Each line answers one
+# LLMClient method for a given input; see llm_client.py for the format.
+# Two steps are used here: "embed" (for the knowledge base + queries) and
+# "generate" (for the final grounded answer). Order-status / ticket
+# replies are templated directly in agent.py and never touch the LLM -
+# only the knowledge-base path needs language generation.
+
+# --- knowledge base documents (seeded once by scripts/seed.py) ---
+{"step": "embed", "pattern": "(?i)return policy allows returns within 30 days", "response": {"vector": [0.9, 0.0, 0.0, 0.0]}}
+{"step": "embed", "pattern": "(?i)ship internationally to over 40 countries",   "response": {"vector": [0.0, 0.9, 0.0, 0.0]}}
+{"step": "embed", "pattern": "(?i)gift cards never expire",                     "response": {"vector": [0.0, 0.0, 0.9, 0.0]}}
+{"step": "embed", "pattern": "(?i)customer support team is available 24/7",     "response": {"vector": [0.0, 0.0, 0.0, 0.9]}}
+
+# --- incoming questions (must land closest to the intended doc above) ---
+{"step": "embed", "pattern": "(?i)how long.*send back|how long.*return",        "response": {"vector": [0.85, 0.05, 0.05, 0.05]}}
+{"step": "embed", "pattern": "(?i)deliver.*other countr|ship.*abroad",          "response": {"vector": [0.05, 0.85, 0.05, 0.05]}}
+{"step": "embed", "pattern": "(?i)gift card.*expir",                            "response": {"vector": [0.05, 0.05, 0.85, 0.05]}}
+{"step": "embed", "pattern": "(?i)talk to.*someone|reach support",              "response": {"vector": [0.05, 0.05, 0.05, 0.85]}}
+# fallback: an unrecognized question embeds far from every doc
+{"step": "embed", "pattern": ".*",                                              "response": {"vector": [0.25, 0.25, 0.25, 0.25]}}
+
+# --- grounded answers, keyed by which doc ended up in the prompt's Context ---
+{"step": "generate", "pattern": "(?i)Context: Our return policy",   "response": {"text": "You can return your purchase within 30 days as long as you have a valid receipt."}}
+{"step": "generate", "pattern": "(?i)Context: We ship internationally", "response": {"text": "Yes, we ship to over 40 countries, with delivery taking about 7 to 14 business days."}}
+{"step": "generate", "pattern": "(?i)Context: Gift cards never expire", "response": {"text": "Gift cards never expire and can be used for any purchase on our site."}}
+{"step": "generate", "pattern": "(?i)Context: Our customer support",    "response": {"text": "Our support team is available around the clock via live chat and email."}}
+{"step": "generate", "pattern": ".*", "response": {"text": "I don't have enough information in our knowledge base to answer that confidently."}}
