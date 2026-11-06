@@ -21,7 +21,7 @@ locals {
 provider "aws" {
   region                      = "us-east-1"
   access_key                  = local.is_local ? "AKIAIOSFODNN7EXAMPLE" : null
-  secret_key                  = local.is_local ? "test" : null
+  secret_key                  = local.is_local ? "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" : null
   skip_credentials_validation = local.is_local
   skip_metadata_api_check     = local.is_local
   skip_requesting_account_id  = local.is_local

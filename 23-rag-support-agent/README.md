@@ -21,8 +21,7 @@ question
 
 Same `LLMClient` dual-mode pattern as `08-llm-gateway` (`LLM_MODE=local`
 default, `LLM_MODE=bedrock` for a real model) — except now `bedrock` mode
-can point at **LocalEmu itself** (`BEDROCK_BACKEND=ollama`), not just real
-AWS, thanks to this workshop's own Bedrock fix. Same code either way.
+can point at **LocalEmu itself** (`BEDROCK_BACKEND=ollama`). Same code either way.
 
 Seven integration tests: 3 knowledge-base (retrieval correctness +
 grounded generation + a real similarity score, not a stub), 2 known-order
@@ -38,23 +37,21 @@ lookups, 1 two-tool chain (unknown order -> ticket), 1 input validation.
 │   ├── create_support_ticket.py  # tool Lambda
 │   ├── llm_client.py             # same dual-mode client as 08-llm-gateway
 │   └── local_answers.jsonl       # canned embed/generate answers for LLM_MODE=local
-├── terraform/                    # 12 resources, one provider
+├── terraform/                    # 11 resources, one provider
 ├── tests/test_agent.py           # 7 tests
 └── scripts/{deploy,test,teardown}.sh, seed.py
 ```
 
 ## Three things worth knowing before you present this live
 
-**1. `terraform apply` and `terraform destroy` each take ~10 minutes
-because of the Terraform AWS provider, not because of LocalEmu.**
-In provider 5.100.0 (`internal/service/opensearch/wait.go`),
-`waitForDomainCreation` and `waitForDomainDelete` call
-`tfresource.WithDelay(10*time.Minute)`: the provider sends no
-`DescribeDomain` request for the first 10 minutes, then polls every 10
-seconds. LocalEmu 1.3.2 reports the domain ready in about 8 seconds
-(LocalEmu 1.3.1, tested, never did when running in Docker; see
-the 1.3.2 changelog). **For a live demo, deploy before you go on stage** (or
-script around Terraform with the raw CLI).
+**1. The OpenSearch domain is created by `deploy.sh` with the AWS CLI,
+not by Terraform.** The Terraform AWS provider (5.100.0,
+`internal/service/opensearch/wait.go`) sends no `DescribeDomain` for the
+first 10 minutes of `aws_opensearch_domain` create and again of delete,
+so Terraform would idle 10 minutes each way while LocalEmu reports the
+domain ready in seconds. `deploy.sh` creates the domain, waits for its
+endpoint and passes it to Terraform as `opensearch_endpoint`;
+`teardown.sh` deletes it. Deploy takes about 40 s, teardown about 15 s.
 
 **2. The agent Lambda can't reach OpenSearch via `localhost:<port>`.**
 `OPENSEARCH_ENDPOINT` (from Terraform) is a *host*-mapped address —
@@ -88,9 +85,9 @@ localemu start   # no special flags - OpenSearch's Docker backend is on by defau
 ## Running the test suite
 
 ```sh
-./scripts/deploy.sh    local   # ~10 min, see caveat #1 above
-./scripts/test.sh      local
-./scripts/teardown.sh  local
+./scripts/deploy.sh   
+./scripts/test.sh
+./scripts/teardown.sh
 ```
 
 ## Running against real local inference (optional)
@@ -108,12 +105,14 @@ BEDROCK_BACKEND=ollama localemu start
 Then deploy with the agent and the seed script both in `bedrock` mode:
 
 ```sh
-LLM_MODE=bedrock TF_VAR_llm_mode=bedrock ./scripts/deploy.sh local
-LLM_MODE=bedrock ./scripts/test.sh local
+LLM_MODE=bedrock TF_VAR_llm_mode=bedrock ./scripts/deploy.sh
+LLM_MODE=bedrock ./scripts/test.sh
 ```
 
 The first call pulls the models into the Ollama sidecar (a few GB) and loads
-them, so the first test run is slow. `anthropic.claude-sonnet-4-6-v1:0`, the
+them. On a CPU-only Docker VM that load took over 3 minutes, longer than the
+agent Lambda's 120 s timeout, so `seed.py` loads the chat model during deploy
+(about 2.5 minutes the first time) and the tests then run against a warm model. `anthropic.claude-sonnet-4-6-v1:0`, the
 default chat model, is served by `llama3.1:8b` (Claude has no open weights).
 
 (The knowledge-base retrieval tests still pass: real embeddings put the
@@ -121,11 +120,3 @@ right FAQ doc closest to the right question, same as the canned vectors
 do, just for real. Run the tests with `LLM_MODE=bedrock` too: the
 similarity-score assertion is relaxed in that mode, because the L2 score of
 a real 768-dimension embedding is far lower than the canned vectors'.)
-
-## Running against real AWS
-
-```sh
-TF_VAR_llm_mode=bedrock ./scripts/deploy.sh aws
-./scripts/test.sh      aws
-./scripts/teardown.sh  aws
-```

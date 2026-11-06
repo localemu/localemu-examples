@@ -18,7 +18,7 @@ locals {
 provider "aws" {
   region                      = local.region
   access_key                  = local.is_local ? "AKIAIOSFODNN7EXAMPLE" : null
-  secret_key                  = local.is_local ? "test" : null
+  secret_key                  = local.is_local ? "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" : null
   skip_credentials_validation = local.is_local
   skip_metadata_api_check     = local.is_local
   skip_requesting_account_id  = local.is_local
@@ -126,8 +126,8 @@ resource "aws_iam_role_policy" "lambda_policy" {
       {
         Effect = "Allow"
         Action = [
-          "s3:HeadBucket", "s3:GetBucketAcl", "s3:GetBucketPolicyStatus",
-          "s3:GetPublicAccessBlock", "s3:PutPublicAccessBlock",
+          "s3:ListBucket", "s3:GetBucketAcl", "s3:GetBucketPolicyStatus",
+          "s3:GetBucketPublicAccessBlock", "s3:PutBucketPublicAccessBlock",
           "s3:PutBucketTagging",
         ]
         Resource = "*"

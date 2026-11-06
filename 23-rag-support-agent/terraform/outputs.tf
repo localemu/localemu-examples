@@ -11,7 +11,7 @@ output "create_ticket_function_name" {
 }
 
 output "opensearch_endpoint" {
-  value = aws_opensearch_domain.kb.endpoint
+  value = var.opensearch_endpoint
 }
 
 output "orders_table" {

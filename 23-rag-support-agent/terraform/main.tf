@@ -7,38 +7,33 @@ terraform {
 }
 
 locals {
-  is_local = var.target == "local"
   endpoint = "http://localhost:4566"
   region   = "us-east-1"
 }
 
 provider "aws" {
   region                      = local.region
-  access_key                  = local.is_local ? "AKIAIOSFODNN7EXAMPLE" : null
-  secret_key                  = local.is_local ? "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" : null
-  skip_credentials_validation = local.is_local
-  skip_metadata_api_check     = local.is_local
-  skip_requesting_account_id  = local.is_local
+  access_key                  = "AKIAIOSFODNN7EXAMPLE"
+  secret_key                  = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+  skip_credentials_validation = true
+  skip_metadata_api_check     = true
+  skip_requesting_account_id  = true
 
-  dynamic "endpoints" {
-    for_each = local.is_local ? [1] : []
-    content {
-      opensearch = local.endpoint
-      dynamodb   = local.endpoint
-      iam        = local.endpoint
-      lambda     = local.endpoint
-      bedrock    = local.endpoint
-      sts        = local.endpoint
-      logs       = local.endpoint
-    }
+  endpoints {
+    opensearch = local.endpoint
+    dynamodb   = local.endpoint
+    iam        = local.endpoint
+    lambda     = local.endpoint
+    bedrock    = local.endpoint
+    sts        = local.endpoint
+    logs       = local.endpoint
   }
 }
 
-# --------------------------- OPENSEARCH (1) ---------------------------
-resource "aws_opensearch_domain" "kb" {
-  domain_name    = "${var.prefix}-kb"
-  engine_version = "OpenSearch_2.11"
-}
+# --------------------------- OPENSEARCH ---------------------------
+# Not a Terraform resource: the AWS provider waits 10 minutes before its first
+# DescribeDomain on create and on delete. scripts/deploy.sh creates the domain
+# with the AWS CLI and passes its endpoint in as var.opensearch_endpoint.
 
 # --------------------------- DYNAMODB (2) ---------------------------
 resource "aws_dynamodb_table" "orders" {
@@ -182,7 +177,7 @@ resource "aws_lambda_function" "agent" {
   memory_size      = 256
   environment {
     variables = {
-      OPENSEARCH_ENDPOINT         = aws_opensearch_domain.kb.endpoint
+      OPENSEARCH_ENDPOINT         = var.opensearch_endpoint
       KB_INDEX                    = "faq-kb"
       CHECK_ORDER_STATUS_FUNCTION = aws_lambda_function.check_order_status.function_name
       CREATE_TICKET_FUNCTION      = aws_lambda_function.create_ticket.function_name

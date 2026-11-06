@@ -23,7 +23,9 @@ aws $ENDPOINT kinesis describe-stream --stream-name my-stream \
   --query 'StreamDescription.{Name:StreamName, Status:StreamStatus, Shards:Shards[].ShardId}'
 
 bold "3. Put 3 records (login, purchase, logout)"
-# AWS CLI v1 sends --data as raw bytes; Kinesis returns it base64-encoded on read.
+# AWS CLI v2 treats --data as a blob parameter and requires
+# --cli-binary-format raw-in-base64-out to send it as raw bytes (v1 did this
+# by default). Kinesis returns the payload base64-encoded on read either way.
 for payload in \
   '{"event":"login","user":"tarek"}' \
   '{"event":"purchase","user":"alice","amount":99.99}' \
@@ -31,6 +33,7 @@ for payload in \
 do
   user=$(echo "$payload" | python3 -c 'import json,sys;print(json.load(sys.stdin)["user"])')
   resp=$(aws $ENDPOINT kinesis put-record \
+    --cli-binary-format raw-in-base64-out \
     --stream-name my-stream \
     --partition-key "user-$user" \
     --data "$payload")

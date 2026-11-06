@@ -14,15 +14,12 @@ TERRAFORM_DIR = Path(__file__).resolve().parent.parent / "terraform"
 
 
 def _aws_kwargs() -> dict:
-    target = os.environ.get("TARGET", "local")
-    if target == "local":
-        return {
-            "region_name": "us-east-1",
-            "aws_access_key_id": "AKIAIOSFODNN7EXAMPLE",
-            "aws_secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-            "endpoint_url": "http://localhost:4566",
-        }
-    return {"region_name": os.environ.get("AWS_REGION", "us-east-1")}
+    return {
+        "region_name": "us-east-1",
+        "aws_access_key_id": "AKIAIOSFODNN7EXAMPLE",
+        "aws_secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        "endpoint_url": "http://localhost:4566",
+    }
 
 
 @pytest.fixture(scope="session")

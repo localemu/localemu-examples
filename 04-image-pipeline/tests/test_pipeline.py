@@ -54,7 +54,7 @@ def test_pipeline_end_to_end(tf, s3, sns, sqs):
             )
         },
     )
-    sns.subscribe(TopicArn=tf["topic_arn"], Protocol="sqs", Endpoint=q_arn)
+    sub_arn = sns.subscribe(TopicArn=tf["topic_arn"], Protocol="sqs", Endpoint=q_arn)["SubscriptionArn"]
 
     # 2. Upload a real 512x384 PNG to the incoming bucket.
     png = _make_test_png()
@@ -90,7 +90,8 @@ def test_pipeline_end_to_end(tf, s3, sns, sqs):
     assert summary["thumbnail"]["width"] == 128
     assert summary["thumbnail"]["height"] == 96
 
-    # cleanup ephemeral queue
+    # cleanup the ephemeral subscription and queue
+    sns.unsubscribe(SubscriptionArn=sub_arn)
     sqs.delete_queue(QueueUrl=q_url)
 
 

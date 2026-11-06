@@ -59,7 +59,7 @@ the Docker image of LocalEmu.
 
 ## Prerequisites
 
-- Python 3.10+ with `pytest`, `boto3`, `requests`, `Pillow` (for the image-pipeline pattern)
+- Python 3.11+ with `pytest`, `boto3`, `requests`, `Pillow` (for the image-pipeline pattern)
 - Terraform 1.5+
 - The AWS CLI
 - LocalEmu running locally on port 4566 (`localemu start`)

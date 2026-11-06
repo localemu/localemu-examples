@@ -14,7 +14,7 @@ locals {
 provider "aws" {
   region                      = "us-east-1"
   access_key                  = local.is_local ? "AKIAIOSFODNN7EXAMPLE" : null
-  secret_key                  = local.is_local ? "test" : null
+  secret_key                  = local.is_local ? "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" : null
   skip_credentials_validation = local.is_local
   skip_metadata_api_check     = local.is_local
   skip_requesting_account_id  = local.is_local
@@ -149,6 +149,23 @@ resource "aws_iam_role_policy" "lambda_policy" {
           aws_dynamodb_table.ledger.arn,
           aws_dynamodb_table.idempotency.arn,
         ]
+      },
+      {
+        # TransactWriteItems is enforced as requiring ALL FOUR of
+        # ConditionCheckItem/PutItem/UpdateItem/DeleteItem against the
+        # resource it resolves for the call -- and since a transaction
+        # has no top-level TableName (table names are nested per-item),
+        # LocalEmu resolves it as a wildcard "table/*" resource rather
+        # than inspecting each item. Real AWS evaluates each item's
+        # actual table individually, so this is wider than strictly
+        # needed on real AWS, but it's required for this call to work
+        # against LocalEmu today.
+        Effect   = "Allow"
+        Action   = [
+          "dynamodb:ConditionCheckItem", "dynamodb:PutItem",
+          "dynamodb:UpdateItem", "dynamodb:DeleteItem",
+        ]
+        Resource = "*"
       },
       {
         Effect   = "Allow"
